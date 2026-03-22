@@ -189,12 +189,16 @@ async function writeMCPConfig(cfg) {
         mcpServers: {
             filesystem: {
                 command: 'npx',
-                args: ['-y', '@modelcontextprotocol/server-filesystem', wp, mp]
+                args: [
+                    '-y',
+                    '@modelcontextprotocol/server-filesystem',
+                    isWindows ? wp : config.workspacePath,
+                    isWindows ? mp : config.memoryPath
+                ]
             },
             terminal: {
                 command: 'npx',
-                args: ['-y', '@modelcontextprotocol/server-shell'],
-                env: { WORKING_DIR: cfg.workspacePath }
+                args: ['-y', '@mako10k/mcp-shell-server']
             },
             browser: {
                 command: 'npx',
@@ -202,13 +206,15 @@ async function writeMCPConfig(cfg) {
             },
             'web-search': {
                 command: 'npx',
-                args: ['-y', '@nickclyde/duckduckgo-mcp-server']
+                args: ['-y', 'duckduckgo-mcp-server']
             },
             memory: {
                 command: 'npx',
                 args: [
-                    '-y', '@modelcontextprotocol/server-memory',
-                    '--db-path', memJson
+                    '-y',
+                    '@modelcontextprotocol/server-memory',
+                    '--db-path',
+                    isWindows ? memJson : path.join(config.memoryPath, 'memory.json')
                 ]
             }
         }
