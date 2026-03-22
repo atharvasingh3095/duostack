@@ -1,0 +1,36 @@
+{
+    "name": "duostack",
+    "version": "1.0.0",
+    "description": "Unified AI development platform — Claude Desktop + Antigravity as one system",
+    "keywords": [
+        "claude",
+        "antigravity",
+        "ai",
+        "mcp",
+        "developer-tools",
+        "agents"
+    ],
+    "homepage": "https://github.com/YourUsername/duostack",
+    "bugs": {
+        "url": "https://github.com/YourUsername/duostack/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/YourUsername/duostack.git"
+    },
+    "license": "MIT",
+    "type": "module",
+    "bin": {
+        "duostack": "./bin/duostack.js"
+    },
+    "dependencies": {
+        "chalk": "^5.3.0",
+        "inquirer": "^9.2.0",
+        "ora": "^7.0.1",
+        "fs-extra": "^11.2.0",
+        "commander": "^11.1.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
