@@ -1,3 +1,54 @@
+# DuoStack platform files — local only, never commit
+TASK.md
+ARCHITECTURE.md
+BUILD_LOG.md
+ERRORS.md
+REVIEW.md
+SPRINT.md
+DESIGN_SYSTEM.md
+DOCS.md
+PERF_REPORT.md
+TEST_REPORT.md
+
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+
+# Environment — never commit
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+test-results/
+playwright-report/
+
+# OS
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
