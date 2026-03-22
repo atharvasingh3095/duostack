@@ -8,15 +8,16 @@
         "ai",
         "mcp",
         "developer-tools",
-        "agents"
+        "agents",
+        "productivity"
     ],
-    "homepage": "https://github.com/YourUsername/duostack",
+    "homepage": "https://github.com/atharvasingh3095/duostack",
     "bugs": {
-        "url": "https://github.com/YourUsername/duostack/issues"
+        "url": "https://github.com/atharvasingh3095/duostack/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/YourUsername/duostack.git"
+        "url": "https://github.com/atharvasingh3095/duostack.git"
     },
     "license": "MIT",
     "type": "module",

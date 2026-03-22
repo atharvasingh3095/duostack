@@ -1,4 +1,3 @@
-// create project
 import inquirer from 'inquirer'
 import ora from 'ora'
 import fs from 'fs-extra'
@@ -22,27 +21,57 @@ export async function newProject(name, desc, stack) {
         process.exit(1)
     }
 
-    // Fill missing via prompt
+    // ── What will be created ──────────────────────────────────
+    console.log()
+    console.log(`  Creating project: ${n}`)
+    console.log()
+    console.log('  This will create:')
+    console.log(`  • ${projectPath}`)
+    console.log(`    (project folder — your code lives here → goes to GitHub)`)
+    console.log(`  • ${memPath}`)
+    console.log(`    (project memory — context and progress → stays local)`)
+    console.log()
+
+    // ── Collect missing info interactively ───────────────────
     let finalDesc = desc
     let finalStack = stack
-    if (!finalDesc || !finalStack) {
-        const a = await inquirer.prompt([
-            !finalDesc && {
-                type: 'input', name: 'desc',
-                message: 'Project description:',
-                validate: v => v.trim().length > 0 || 'Required'
-            },
-            !finalStack && {
-                type: 'input', name: 'stack',
-                message: 'Tech stack (e.g. Next.js, Tailwind, Supabase):',
-                default: 'To be decided'
-            }
-        ].filter(Boolean))
-        finalDesc = finalDesc || a.desc
-        finalStack = finalStack || a.stack
+
+    if (!finalDesc) {
+        console.log('  ℹ  Description helps Claude Desktop understand your project.')
+        console.log('     Examples:')
+        console.log('     • "E-commerce site for a local clothing brand"')
+        console.log('     • "IoT dashboard for sensor monitoring"')
+        console.log('     • "SaaS app for freelance invoice management"')
+        console.log()
+        const a = await inquirer.prompt([{
+            type: 'input',
+            name: 'desc',
+            message: 'Project description:',
+            validate: v => v.trim().length > 0 || 'Required — describe what you are building'
+        }])
+        finalDesc = a.desc
     }
 
-    log.title(`Creating project: ${n}`)
+    if (!finalStack) {
+        console.log()
+        console.log('  ℹ  Tech stack helps Claude Desktop make architecture decisions.')
+        console.log('     Examples:')
+        console.log('     • "Next.js 14, TypeScript, Tailwind CSS, MongoDB, Vercel"')
+        console.log('     • "React, Node.js, Express, PostgreSQL, Redis"')
+        console.log('     • "ESP32, FreeRTOS, C++, MQTT, InfluxDB, Grafana"')
+        console.log('     • "Next.js, Tailwind, Supabase"')
+        console.log('     Type "TBD" if not decided yet — Claude will help you choose.')
+        console.log()
+        const a = await inquirer.prompt([{
+            type: 'input',
+            name: 'stack',
+            message: 'Tech stack:',
+            default: 'TBD — Claude Desktop will help decide'
+        }])
+        finalStack = a.stack
+    }
+
+    console.log()
 
     const vars = {
         USERNAME: cfg.username,
@@ -56,27 +85,29 @@ export async function newProject(name, desc, stack) {
         DUOSTACK_VERSION: '1.0.0'
     }
 
-    const TOTAL = 6
-
-    const s1 = ora({ text: '  Folders...', indent: 2 }).start()
+    // ── Create folders ───────────────────────────────────────
+    const s1 = ora({ text: '  Creating folders...', indent: 2 }).start()
     try {
         await fs.ensureDir(projectPath)
         await fs.ensureDir(memPath)
         s1.succeed('  Folders created')
     } catch (e) { s1.fail(e.message); process.exit(1) }
 
-    const s2 = ora({ text: '  Memory files...', indent: 2 }).start()
+    // ── Memory files ─────────────────────────────────────────
+    const s2 = ora({ text: '  Writing memory files...', indent: 2 }).start()
     try {
         for (const f of ['context.md', 'stack.md', 'progress.md']) {
             await writeTemplate(
                 `memory/project/${f}`,
-                path.join(memPath, f), vars
+                path.join(memPath, f),
+                vars
             )
         }
         s2.succeed('  Memory files written')
     } catch (e) { s2.fail(e.message); process.exit(1) }
 
-    const s3 = ora({ text: '  Project platform files...', indent: 2 }).start()
+    // ── Platform files ───────────────────────────────────────
+    const s3 = ora({ text: '  Writing project platform files...', indent: 2 }).start()
     try {
         const files = [
             'TASK.md', 'ARCHITECTURE.md', 'BUILD_LOG.md',
@@ -85,30 +116,37 @@ export async function newProject(name, desc, stack) {
         for (const f of files) {
             await writeTemplate(
                 `project/${f}`,
-                path.join(projectPath, f), vars
+                path.join(projectPath, f),
+                vars
             )
         }
-        s3.succeed('  Platform files written')
+        s3.succeed('  Platform files written (TASK, ARCHITECTURE, BUILD_LOG, ERRORS, REVIEW, SPRINT)')
     } catch (e) { s3.fail(e.message); process.exit(1) }
 
-    const s4 = ora({ text: '  .gitignore...', indent: 2 }).start()
+    // ── .gitignore ───────────────────────────────────────────
+    const s4 = ora({ text: '  Writing .gitignore...', indent: 2 }).start()
     try {
         await writeTemplate(
             'project/.gitignore',
-            path.join(projectPath, '.gitignore'), vars
+            path.join(projectPath, '.gitignore'),
+            vars
         )
-        s4.succeed('  .gitignore written')
+        s4.succeed('  .gitignore written (platform files excluded from GitHub)')
     } catch (e) { s4.fail(e.message); process.exit(1) }
 
-    const s5 = ora({ text: '  Git init...', indent: 2 }).start()
+    // ── Git init ─────────────────────────────────────────────
+    const s5 = ora({ text: '  Initializing Git...', indent: 2 }).start()
     try {
         execSync('git init', { cwd: projectPath, stdio: 'ignore' })
         execSync('git branch -M main', { cwd: projectPath, stdio: 'ignore' })
         execSync('git add .gitignore', { cwd: projectPath, stdio: 'ignore' })
-        execSync(`git commit -m "init: ${n}"`, { cwd: projectPath, stdio: 'ignore' })
-        s5.succeed('  Git initialized')
-    } catch (e) { s5.warn('  Git init failed — run manually') }
+        execSync(`git commit -m "init: ${n} project"`, {
+            cwd: projectPath, stdio: 'ignore'
+        })
+        s5.succeed('  Git initialized (first commit done)')
+    } catch (e) { s5.warn('  Git init failed — run manually in project folder') }
 
+    // ── Register project ─────────────────────────────────────
     const s6 = ora({ text: '  Registering project...', indent: 2 }).start()
     try {
         cfg.projects = cfg.projects || []
@@ -136,19 +174,40 @@ export async function newProject(name, desc, stack) {
 - Last worked: ${date}
 `
         )
-        s6.succeed('  Project registered')
+        s6.succeed('  Project registered in DuoStack')
     } catch (e) { s6.warn('  Registry update failed') }
 
+    // ── Done ─────────────────────────────────────────────────
     log.title(`Project '${n}' ready.`)
-    console.log('  Next steps:\n')
-    console.log(`  1. Create GitHub repo:`)
-    console.log(`     github.com/new → name: ${n} → Private → Create`)
-    console.log(`  2. Connect:`)
+
+    console.log('  Next steps:')
+    console.log()
+    console.log('  1. Create GitHub repo (private):')
+    console.log(`     → github.com/new`)
+    console.log(`     → Name: ${n}`)
+    console.log(`     → Set to Private`)
+    console.log(`     → Do NOT add README or .gitignore`)
+    console.log()
+    console.log('  2. Connect to GitHub:')
     console.log(`     cd "${projectPath}"`)
     console.log(`     git remote add origin https://github.com/${cfg.githubUsername}/${n}.git`)
     console.log(`     git push -u origin main`)
-    console.log(`  3. Antigravity → open: ${projectPath}`)
-    console.log(`  4. New Claude Desktop chat:`)
+    console.log()
+    console.log('  3. Open Antigravity:')
+    console.log(`     Agent Manager → Open Workspace → ${projectPath}`)
+    console.log('     Model → Claude Sonnet 4.6 | Mode → Planning')
+    console.log()
+    console.log('  4. Open Claude Desktop → new chat → say:')
     console.log(`     "I'm working on ${n}. Read my memory and brief me."`)
+    console.log()
+    console.log('  Available Antigravity skills for this project:')
+    console.log('     /developer  → build features from TASK.md')
+    console.log('     /devops     → setup, deploy, CI/CD')
+    console.log('     /qa         → run full test suite')
+    console.log('     /ui         → build UI components')
+    console.log('     /perf       → performance analysis')
+    console.log('     /reviewer   → code review')
+    console.log('     /pm         → sprint planning')
+    console.log('     /learn      → explain and document')
     console.log()
 }
