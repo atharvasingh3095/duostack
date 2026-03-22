@@ -6,13 +6,17 @@ import { execSync } from 'child_process'
 import { log } from '../lib/logger.js'
 import { writeTemplate } from '../lib/template.js'
 import { requireConfig, saveConfig } from '../lib/config.js'
+import { getPackageVersion } from '../lib/paths.js'
 
-export async function newProject(name, desc, stack) {
+const VERSION = getPackageVersion()
+
+export async function newProject(name, desc, stack, githubOverride) {
     const cfg = await requireConfig()
     const n = name.toLowerCase().trim().replace(/[^a-z0-9-]/g, '-')
     const date = new Date().toISOString().split('T')[0]
     const projectPath = path.join(cfg.workspacePath, n)
     const memPath = path.join(cfg.memoryPath, 'projects', n)
+    const ghUser = githubOverride || cfg.githubUsername
 
     // Guard: already exists
     if (await fs.pathExists(projectPath)) {
@@ -24,6 +28,9 @@ export async function newProject(name, desc, stack) {
     // ── What will be created ──────────────────────────────────
     console.log()
     console.log(`  Creating project: ${n}`)
+    if (githubOverride) {
+        console.log(`  Using GitHub account: ${ghUser} (overridden)`)
+    }
     console.log()
     console.log('  This will create:')
     console.log(`  • ${projectPath}`)
@@ -75,14 +82,15 @@ export async function newProject(name, desc, stack) {
 
     const vars = {
         USERNAME: cfg.username,
-        GITHUB_USERNAME: cfg.githubUsername,
+        GITHUB_USERNAME: ghUser,
         WORKSPACE_PATH: cfg.workspacePath,
         MEMORY_PATH: cfg.memoryPath,
         PROJECT_NAME: n,
         PROJECT_DESC: finalDesc,
         PROJECT_STACK: finalStack,
+        GIT_MODE: cfg.gitMode || 'manual',
         DATE: date,
-        DUOSTACK_VERSION: '1.0.0'
+        DUOSTACK_VERSION: VERSION
     }
 
     // ── Create folders ───────────────────────────────────────
@@ -146,6 +154,31 @@ export async function newProject(name, desc, stack) {
         s5.succeed('  Git initialized (first commit done)')
     } catch (e) { s5.warn('  Git init failed — run manually in project folder') }
 
+    // ── Auto-create GitHub repo (if gh CLI available) ────────
+    let repoCreated = false
+    if (cfg.hasGhCli) {
+        const { autoRepo } = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'autoRepo',
+            message: `Auto-create private GitHub repo '${n}' using GitHub CLI?`,
+            default: true
+        }])
+
+        if (autoRepo) {
+            const s5b = ora({ text: '  Creating GitHub repo...', indent: 2 }).start()
+            try {
+                execSync(
+                    `gh repo create ${ghUser}/${n} --private --source="${projectPath}" --remote=origin --push`,
+                    { stdio: 'ignore' }
+                )
+                s5b.succeed(`  GitHub repo created: github.com/${ghUser}/${n}`)
+                repoCreated = true
+            } catch (e) {
+                s5b.warn('  Auto repo creation failed — create manually')
+            }
+        }
+    }
+
     // ── Register project ─────────────────────────────────────
     const s6 = ora({ text: '  Registering project...', indent: 2 }).start()
     try {
@@ -158,7 +191,8 @@ export async function newProject(name, desc, stack) {
             createdAt: date,
             lastWorked: date,
             path: projectPath,
-            github: `https://github.com/${cfg.githubUsername}/${n}`
+            github: `https://github.com/${ghUser}/${n}`,
+            githubUser: ghUser
         })
         await saveConfig(cfg)
         await fs.appendFile(
@@ -167,7 +201,7 @@ export async function newProject(name, desc, stack) {
 ## ${n}
 - Status: active
 - Location: ${projectPath}
-- GitHub: https://github.com/${cfg.githubUsername}/${n}
+- GitHub: https://github.com/${ghUser}/${n}
 - Memory: ${memPath}
 - Stack: ${finalStack}
 - Started: ${date}
@@ -182,23 +216,33 @@ export async function newProject(name, desc, stack) {
 
     console.log('  Next steps:')
     console.log()
-    console.log('  1. Create GitHub repo (private):')
-    console.log(`     → github.com/new`)
-    console.log(`     → Name: ${n}`)
-    console.log(`     → Set to Private`)
-    console.log(`     → Do NOT add README or .gitignore`)
-    console.log()
-    console.log('  2. Connect to GitHub:')
-    console.log(`     cd "${projectPath}"`)
-    console.log(`     git remote add origin https://github.com/${cfg.githubUsername}/${n}.git`)
-    console.log(`     git push -u origin main`)
-    console.log()
-    console.log('  3. Open Antigravity:')
+
+    if (repoCreated) {
+        console.log('  1. ✓ GitHub repo already created and pushed')
+        console.log()
+    } else {
+        console.log('  1. Create GitHub repo (private):')
+        console.log(`     → github.com/new`)
+        console.log(`     → Name: ${n}`)
+        console.log(`     → Set to Private`)
+        console.log(`     → Do NOT add README or .gitignore`)
+        console.log()
+        console.log('  2. Connect to GitHub:')
+        console.log(`     cd "${projectPath}"`)
+        console.log(`     git remote add origin https://github.com/${ghUser}/${n}.git`)
+        console.log(`     git push -u origin main`)
+        console.log()
+    }
+
+    const stepN = repoCreated ? 2 : 3
+    console.log(`  ${stepN}. Open Antigravity:`)
     console.log(`     Agent Manager → Open Workspace → ${projectPath}`)
     console.log('     Model → Claude Sonnet 4.6 | Mode → Planning')
     console.log()
-    console.log('  4. Open Claude Desktop → new chat → say:')
+    console.log(`  ${stepN + 1}. Open Claude Desktop → new chat → say:`)
     console.log(`     "I'm working on ${n}. Read my memory and brief me."`)
+    console.log()
+    console.log(`  Git mode: ${cfg.gitMode || 'manual'}`)
     console.log()
     console.log('  Available Antigravity skills for this project:')
     console.log('     /developer  → build features from TASK.md')

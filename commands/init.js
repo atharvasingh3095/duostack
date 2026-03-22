@@ -5,16 +5,29 @@ import path from 'path'
 import { execSync } from 'child_process'
 import { log } from '../lib/logger.js'
 import { writeTemplate } from '../lib/template.js'
-import { saveConfig } from '../lib/config.js'
+import { loadConfig, saveConfig } from '../lib/config.js'
 import {
     getClaudeConfigDir,
     getDefaultWorkspace,
     getDefaultMemory,
+    getPackageVersion,
     IS_WINDOWS
 } from '../lib/paths.js'
 
-export async function init() {
-    log.title('DuoStack v1.0.0 — Setup Wizard')
+const VERSION = getPackageVersion()
+
+export async function init(opts = {}) {
+    const force = opts.force || false
+    const existing = await loadConfig()
+
+    log.title(`DuoStack v${VERSION} — Setup Wizard`)
+
+    if (force && existing) {
+        log.info('Force mode — reusing existing config values')
+        console.log()
+        await runSetup(existing, true)
+        return
+    }
 
     console.log('  This wizard will set up DuoStack on your machine.')
     console.log('  It creates two folders and configures Claude Desktop.')
@@ -33,29 +46,33 @@ export async function init() {
     log.success('Node.js ✓   Git ✓')
     console.log()
 
-    // ── Collect user info ────────────────────────────────────
+    // ── Collect user info (one-time) ─────────────────────────
     console.log('  ℹ  Your GitHub username and email are used for:')
     console.log('     • Git commit author identity')
     console.log('     • Generating correct GitHub repo URLs in projects')
     console.log()
 
+    const defaults = existing || {}
     const answers = await inquirer.prompt([
         {
             type: 'input',
             name: 'username',
             message: 'GitHub display name (e.g. Atharva):',
+            default: defaults.username || undefined,
             validate: v => v.trim().length > 0 || 'Required'
         },
         {
             type: 'input',
             name: 'email',
             message: 'GitHub email (e.g. you@gmail.com):',
+            default: defaults.email || undefined,
             validate: v => v.includes('@') || 'Enter a valid email'
         },
         {
             type: 'input',
             name: 'githubUsername',
-            message: 'GitHub username (e.g. atharvasingh7007):',
+            message: 'GitHub username (e.g. atharvasingh3095):',
+            default: defaults.githubUsername || undefined,
             validate: v => v.trim().length > 0 || 'Required'
         }
     ])
@@ -78,25 +95,47 @@ export async function init() {
             type: 'input',
             name: 'workspacePath',
             message: 'Workspace folder:',
-            default: getDefaultWorkspace()
+            default: defaults.workspacePath || getDefaultWorkspace()
         },
         {
             type: 'input',
             name: 'memoryPath',
             message: 'Memory folder (private):',
-            default: getDefaultMemory()
+            default: defaults.memoryPath || getDefaultMemory()
         }
     ])
 
+    // ── Git automation preference ────────────────────────────
+    console.log()
+    console.log('  ℹ  Git operations (commit, push, sync) can be:')
+    console.log()
+    console.log('     Manual     — you control all git operations yourself')
+    console.log('     AI-managed — Claude Desktop and Antigravity handle git')
+    console.log('     Ask        — AI tools ask before each git operation')
+    console.log()
+
+    const { gitMode } = await inquirer.prompt([{
+        type: 'list',
+        name: 'gitMode',
+        message: 'How should git operations be handled?',
+        default: defaults.gitMode || 'manual',
+        choices: [
+            { name: 'Manual — I control git myself', value: 'manual' },
+            { name: 'AI-managed — Claude/Antigravity handle git', value: 'auto' },
+            { name: 'Ask each time — AI asks before git operations', value: 'ask' }
+        ]
+    }])
+
     const cfg = {
-        version: '1.0.0',
+        version: VERSION,
         username: answers.username.trim(),
         email: answers.email.trim(),
         githubUsername: answers.githubUsername.trim(),
         workspacePath: pathAnswers.workspacePath,
         memoryPath: pathAnswers.memoryPath,
-        installedAt: new Date().toISOString(),
-        projects: []
+        gitMode,
+        installedAt: existing?.installedAt || new Date().toISOString(),
+        projects: existing?.projects || []
     }
 
     // ── File access confirmation ─────────────────────────────
@@ -123,14 +162,21 @@ export async function init() {
         process.exit(0)
     }
 
+    await runSetup(cfg, false)
+}
+
+// ── Main setup runner (shared by normal and force mode) ──────
+
+async function runSetup(cfg, isForce) {
     const vars = {
         USERNAME: cfg.username,
         EMAIL: cfg.email,
         GITHUB_USERNAME: cfg.githubUsername,
         WORKSPACE_PATH: cfg.workspacePath,
         MEMORY_PATH: cfg.memoryPath,
+        GIT_MODE: cfg.gitMode || 'manual',
         DATE: new Date().toISOString().split('T')[0],
-        DUOSTACK_VERSION: '1.0.0'
+        DUOSTACK_VERSION: VERSION
     }
 
     // ── Create folders ───────────────────────────────────────
@@ -185,6 +231,18 @@ export async function init() {
         s4.succeed('  8 skills installed (developer, devops, reviewer, pm, qa, perf, ui, learn)')
     } catch (e) { s4.fail(`  ${e.message}`); process.exit(1) }
 
+    // ── Backup existing MCP config ───────────────────────────
+    const mcpDir = getClaudeConfigDir()
+    const mcpFile = path.join(mcpDir, 'claude_desktop_config.json')
+    if (await fs.pathExists(mcpFile)) {
+        const backupFile = path.join(mcpDir, 'claude_desktop_config.backup.json')
+        const s4b = ora({ text: '  Backing up existing MCP config...', indent: 2 }).start()
+        try {
+            await fs.copy(mcpFile, backupFile)
+            s4b.succeed(`  MCP config backed up → claude_desktop_config.backup.json`)
+        } catch (e) { s4b.warn(`  Backup failed: ${e.message}`) }
+    }
+
     // ── MCP config ───────────────────────────────────────────
     const s5 = ora({ text: '  Writing Claude Desktop MCP config...', indent: 2 }).start()
     try {
@@ -201,54 +259,19 @@ export async function init() {
         s6.succeed(`  Git configured (${cfg.username} · ${cfg.email})`)
     } catch (e) { s6.warn(`  Git config failed — configure manually`) }
 
-    // ── GitHub setup ─────────────────────────────────────────
-    console.log()
-    console.log('  ℹ  GitHub is used to store your project code.')
-    console.log('     Memory and config files never go to GitHub.')
-    console.log()
-
-    const { githubNow } = await inquirer.prompt([{
-        type: 'list',
-        name: 'githubNow',
-        message: 'Set up GitHub authentication now?',
-        choices: [
-            {
-                name: 'Yes — open browser and authenticate now (recommended)',
-                value: 'now'
-            },
-            {
-                name: 'Later — I will run: git push when creating my first project',
-                value: 'later'
-            }
-        ]
-    }])
-
-    if (githubNow === 'now') {
-        const s7 = ora({ text: '  Setting up GitHub auth...', indent: 2 }).start()
-        try {
-            const testDir = path.join(cfg.workspacePath, '.github-auth-test')
-            await fs.ensureDir(testDir)
-            execSync('git init', { cwd: testDir, stdio: 'ignore' })
-            execSync('git branch -M main', { cwd: testDir, stdio: 'ignore' })
-            await fs.writeFile(path.join(testDir, 'README.md'), '# auth test')
-            execSync('git add .', { cwd: testDir, stdio: 'ignore' })
-            execSync('git commit -m "auth test"', { cwd: testDir, stdio: 'ignore' })
-            s7.info('  Browser will open for GitHub login — sign in when prompted')
-            s7.stop()
-            console.log()
-            console.log('  After signing in, come back here.')
-            console.log('  Press Enter to continue...')
-            await inquirer.prompt([{ type: 'input', name: 'cont', message: '' }])
-            await fs.remove(testDir)
-            log.success('  GitHub authentication set up')
-        } catch (e) {
-            s7.warn('  GitHub auth — complete manually on first git push')
-        }
-    } else {
-        log.info('  GitHub auth — will prompt on first: git push')
+    // ── GitHub CLI check ─────────────────────────────────────
+    let hasGhCli = false
+    try {
+        execSync('gh --version', { stdio: 'ignore' })
+        hasGhCli = true
+        log.success('  GitHub CLI (gh) detected — auto repo creation available')
+    } catch {
+        log.info('  GitHub CLI not installed — repos must be created manually on github.com')
+        log.info('  Optional: install from https://cli.github.com for auto repo creation')
     }
 
     // ── Save config ──────────────────────────────────────────
+    cfg.hasGhCli = hasGhCli
     await saveConfig(cfg)
 
     // ── Done ─────────────────────────────────────────────────
@@ -271,6 +294,7 @@ export async function init() {
     console.log('  4. Open Claude Desktop → new chat → say:')
     console.log('     "I\'m working on myapp. Read my memory and brief me."')
     console.log()
+    console.log(`  Git mode: ${cfg.gitMode}`)
     console.log('  Run duostack verify anytime to check platform health.')
     console.log()
 }

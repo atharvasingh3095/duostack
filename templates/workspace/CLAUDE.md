@@ -48,6 +48,11 @@ I can also build directly when needed using MCP tools.
 4. Write REVIEW.md if a build happened
 5. Run: duostack sync [project-name]
 
+## Git Operations — Mode: {{GIT_MODE}}
+- If mode is **manual**: Never run git commands. Tell the user what to run.
+- If mode is **auto**: Run git add, commit, push when appropriate. Use commit format: type: description
+- If mode is **ask**: Ask the user before every git operation. Show the exact command.
+
 ## Hard Rules
 - Never delete files without asking the user
 - Always read existing code before writing new code

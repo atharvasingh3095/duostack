@@ -5,6 +5,7 @@
 - Project: —
 - Date: —
 - Lock: free
+- Git mode: {{GIT_MODE}}
 
 ## Current task
 - Project: —

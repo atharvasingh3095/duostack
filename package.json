@@ -21,6 +21,12 @@
     },
     "license": "MIT",
     "type": "module",
+    "files": [
+        "bin",
+        "commands",
+        "lib",
+        "templates"
+    ],
     "bin": {
         "duostack": "./bin/duostack.js"
     },

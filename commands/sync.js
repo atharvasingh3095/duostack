@@ -31,7 +31,9 @@ export async function sync(project, message) {
     }
 
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 16)
-    const msg = message || `sync: ${ts}`
+    const raw = message || `sync: ${ts}`
+    // Escape quotes and dollar signs to prevent shell injection
+    const msg = raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$')
 
     const spinner = ora({ text: `  Syncing '${project}'...`, indent: 2 }).start()
     try {
@@ -47,6 +49,15 @@ export async function sync(project, message) {
         }
 
         execSync(`git commit -m "${msg}"`, { cwd: projectPath })
+
+        // Pull remote changes before pushing to avoid conflicts
+        try {
+            execSync('git pull --rebase', { cwd: projectPath, stdio: 'ignore' })
+        } catch {
+            spinner.warn(`  Rebase conflict — resolve manually in ${projectPath}`)
+            process.exit(1)
+        }
+
         execSync('git push', { cwd: projectPath })
 
         // Update registry

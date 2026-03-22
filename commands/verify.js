@@ -10,7 +10,7 @@ const REQUIRED_MCP_SERVERS = ['filesystem', 'terminal', 'browser', 'web-search',
 const CORRECT_PACKAGES = {
     filesystem: '@modelcontextprotocol/server-filesystem',
     terminal: '@mako10k/mcp-shell-server',
-    browser: '@modelcontextprotocol/server-puppeteer',
+    browser: '@playwright/mcp@latest',
     'web-search': 'duckduckgo-mcp-server',
     memory: '@modelcontextprotocol/server-memory'
 }
@@ -179,7 +179,7 @@ export async function verify(project) {
             // Required platform files
             const requiredFiles = [
                 'TASK.md', 'ARCHITECTURE.md', 'BUILD_LOG.md',
-                'ERRORS.md', 'REVIEW.md', 'SPRINT.md'
+                'ERRORS.md', 'REVIEW.md', 'SPRINT.md', 'DESIGN_SYSTEM.md'
             ]
             const missingFiles = []
             for (const f of requiredFiles) {
@@ -230,17 +230,3 @@ export async function verify(project) {
     }
     console.log()
 }
-```
-
----
-
-// ## What's New vs Old
-// ```
-// Added:   CORRECT_PACKAGES map — validates actual package names
-// Added:   Wrong package detection with helpful fix message
-// Added: Per - project platform files check(TASK.md etc)
-// Added:   Git uncommitted changes warning
-// Added:   Git status check per project
-// Added:   Better error messages with actionable fix commands
-// Fixed:   MCP missing server message now says run init
-// Kept:    All existing checks unchanged
