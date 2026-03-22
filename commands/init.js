@@ -307,7 +307,7 @@ async function writeMCPConfig(cfg) {
             },
             browser: {
                 command: 'npx',
-                args: ['-y', '@modelcontextprotocol/server-puppeteer']
+                args: ['-y', '@playwright/mcp@latest']
             },
             'web-search': {
                 command: 'npx',
